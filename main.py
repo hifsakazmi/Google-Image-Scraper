@@ -22,7 +22,8 @@ def worker_thread(search_key):
         min_resolution, 
         max_resolution, 
         max_missed)
-    image_urls = image_scraper.find_image_urls()
+    #image_urls = image_scraper.find_image_urls()
+    image_urls = image_scraper.find_image_urls_upadated()
     image_scraper.save_images(image_urls, keep_filenames)
 
     #Release resources
@@ -34,10 +35,10 @@ if __name__ == "__main__":
     image_path = os.path.normpath(os.path.join(os.getcwd(), 'photos'))
 
     #Add new search key into array ["cat","t-shirt","apple","orange","pear","fish"]
-    search_keys = list(set(["cat","t-shirt"]))
+    search_keys = list(set(["south+asian+men", "korean+men"]))
 
     #Parameters
-    number_of_images = 5                # Desired number of images
+    number_of_images = 100              # Desired number of images
     headless = True                     # True = No Chrome GUI
     min_resolution = (0, 0)             # Minimum desired image resolution
     max_resolution = (9999, 9999)       # Maximum desired image resolution

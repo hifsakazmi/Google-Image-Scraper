@@ -7,10 +7,13 @@ Created on Sat Jul 18 13:01:02 2020
 #import selenium drivers
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, ElementClickInterceptedException
+
+#from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
 
 #import helper libraries
 import time
@@ -26,7 +29,7 @@ import re
 import patch
 
 class GoogleImageScraper():
-    def __init__(self, webdriver_path, image_path, search_key="cat", number_of_images=1, headless=True, min_resolution=(0, 0), max_resolution=(1920, 1080), max_missed=10):
+    def __init__(self, webdriver_path, image_path, search_key="", number_of_images=1, headless=True, min_resolution=(0, 0), max_resolution=(1920, 1080), max_missed=10):
         #check parameter types
         image_path = os.path.join(image_path, search_key)
         if (type(number_of_images)!=int):
@@ -48,16 +51,19 @@ class GoogleImageScraper():
                 options = Options()
                 if(headless):
                     options.add_argument('--headless')
-                driver = webdriver.Chrome(webdriver_path, chrome_options=options)
+                service = Service(webdriver_path)                    
+                driver = webdriver.Chrome(service=service, options=options)
                 driver.set_window_size(1400,1050)
                 driver.get("https://www.google.com")
                 try:
+                    
                     WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.ID, "W0wltc"))).click()
                 except Exception as e:
                     continue
             except Exception as e:
                 #update chromedriver
-                pattern = '(\d+\.\d+\.\d+\.\d+)'
+                print(e)
+                pattern = r'(\d+\.\d+\.\d+\.\d+)'
                 version = list(set(re.findall(pattern, str(e))))[0]
                 is_patched = patch.download_lastest_chromedriver(version)
                 if (not is_patched):
@@ -84,43 +90,55 @@ class GoogleImageScraper():
         """
         print("[INFO] Gathering image links")
         self.driver.get(self.url)
+        print(f"{self.url}")
         image_urls=[]
         count = 0
         missed_count = 0
         indx_1 = 0
         indx_2 = 0
         search_string = '//*[@id="islrg"]/div[1]/div[%s]/a[1]/div[1]/img'
+        print(f"{search_string}")
         time.sleep(3)
         while self.number_of_images > count and missed_count < self.max_missed:
+            print(f"here 1")
             if indx_2 > 0:
                 try:
                     imgurl = self.driver.find_element(By.XPATH, search_string%(indx_1,indx_2+1))
+                    print(f"imgURL 1: {imgurl}")
                     imgurl.click()
                     indx_2 = indx_2 + 1
                     missed_count = 0
-                except Exception:
+                except Exception as e:
+                    print(f"Ex 1: {e}")
                     try:
                         imgurl = self.driver.find_element(By.XPATH, search_string%(indx_1+1,1))
+                        print(f"imgURL 2: {imgurl}")
                         imgurl.click()
                         indx_2 = 1
                         indx_1 = indx_1 + 1
-                    except:
+                    except Exception as e:
+                        print(f"Ex 2: {e}")
                         indx_2 = indx_2 + 1
                         missed_count = missed_count + 1
             else:
+                print(f"here 2")
                 try:
                     imgurl = self.driver.find_element(By.XPATH, search_string%(indx_1+1))
+                    print(f"imgURL 3: {imgurl}")
                     imgurl.click()
                     missed_count = 0
                     indx_1 = indx_1 + 1    
-                except Exception:
+                except Exception as e:
                     try:
+                        print(f"Ex 3: {e}")
                         imgurl = self.driver.find_element(By.XPATH, '//*[@id="islrg"]/div[1]/div[%s]/div[%s]/a[1]/div[1]/img'%(indx_1,indx_2+1))
+                        print(f"imgURL in exception: {imgurl}")
                         imgurl.click()
                         missed_count = 0
                         indx_2 = indx_2 + 1
                         search_string = '//*[@id="islrg"]/div[1]/div[%s]/div[%s]/a[1]/div[1]/img'
-                    except Exception:
+                    except Exception as e:
+                        print(f"Ex 4: {e}")
                         indx_1 = indx_1 + 1
                         missed_count = missed_count + 1
                     
@@ -129,6 +147,7 @@ class GoogleImageScraper():
                 time.sleep(1)
                 class_names = ["n3VNCb","iPVvYb","r48jcc","pT0Scc"]
                 images = [self.driver.find_elements(By.CLASS_NAME, class_name) for class_name in class_names if len(self.driver.find_elements(By.CLASS_NAME, class_name)) != 0 ][0]
+                print("d2")
                 for image in images:
                     #only download images that starts with http
                     src_link = image.get_attribute("src")
@@ -138,7 +157,8 @@ class GoogleImageScraper():
                         image_urls.append(src_link)
                         count +=1
                         break
-            except Exception:
+            except Exception as e:
+                print(e)
                 print("[INFO] Unable to get link")
 
             try:
@@ -157,6 +177,68 @@ class GoogleImageScraper():
         self.driver.quit()
         print("[INFO] Google search ended")
         return image_urls
+        
+    def find_image_urls_upadated(self):
+        print("[INFO] Gathering image links 2")
+        self.driver.get(self.url)
+        print(self.url)
+        # Wait for the search results to load
+        WebDriverWait(self.driver, 10).until(
+            EC.presence_of_all_elements_located((By.CSS_SELECTOR, "img.YQ4gaf"))
+        )
+        image_urls = set()
+
+        # Get the first 10 thumbnails
+        thumbnails = self.driver.find_elements(By.CSS_SELECTOR, "img.YQ4gaf")[:self.number_of_images]
+        for index in range(len(thumbnails)):
+            try:
+                # Re-fetch the list of thumbnails dynamically
+                thumbnails = self.driver.find_elements(By.CSS_SELECTOR, "img.YQ4gaf")
+                if index >= len(thumbnails):
+                    print("Not enough thumbnails found.")
+                    break
+                
+                # Select the current thumbnail
+                thumbnail = thumbnails[index]
+                
+                
+                # Click on the thumbnail to open the larger image
+                #thumbnail.click()
+                # Scroll to the thumbnail to ensure it's in view
+                self.driver.execute_script("arguments[0].scrollIntoView(true);", thumbnail)
+                time.sleep(1)  # Pause briefly to allow scrolling to complete
+                
+                try:
+                    thumbnail.click()
+                except ElementClickInterceptedException:
+                    print(f"Click intercepted for thumbnail at index {index}. Retrying with JS...")
+                    self.driver.execute_script("arguments[0].click();", thumbnail)
+
+                # Wait for the large image to load
+                large_image = WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "img.sFlh5c.FyHeAf.iPVvYb"))
+                )
+                image_url = large_image.get_attribute("src")
+                print(f"Image {index + 1}: {image_url}")
+
+                #images = self.driver.find_elements(By.CSS_SELECTOR, 'img.sFlh5c.FyHeAf.iPVvYb')
+                #for image in images:
+                
+                #    if image.get_attribute('src') and 'http' in image.get_attribute('src'):
+                #        src_link = image.get_attribute('src')
+                #        image_urls.append(src_link)
+                #        print(f"Found {len(index)}")
+                
+                # Get the URL of the larger image
+                src_link = large_image.get_attribute("src")
+                image_urls.add(src_link)
+            except Exception as e:
+                print(f"Failed to get image {index + 1}: {e}")
+
+        # Optional: Pause between downloads to avoid triggering Google's rate limits
+        #time.sleep(2)
+
+        return list(image_urls)
 
     def save_images(self,image_urls, keep_filenames):
         print(keep_filenames)
